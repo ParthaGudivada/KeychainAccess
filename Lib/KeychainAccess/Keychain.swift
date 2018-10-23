@@ -576,6 +576,37 @@ public final class Keychain {
             throw securityError(status: status)
         }
     }
+    
+    public func findForProtectedKey(_ key: String) throws  -> Bool {
+        
+        var query = options.query()
+        query[AttributeAccount] = key
+        #if os(iOS)
+        if #available(iOS 9.0, *) {
+            query[UseAuthenticationUI] = UseAuthenticationUIFail
+        } else {
+            query[UseNoAuthenticationUI] = kCFBooleanTrue
+        }
+        #elseif os(OSX)
+        query[ReturnData] = kCFBooleanTrue
+        if #available(OSX 10.11, *) {
+            query[UseAuthenticationUI] = UseAuthenticationUIFail
+        }
+        #endif
+        
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        
+        switch status {
+        case errSecInteractionNotAllowed, errSecSuccess:
+            return true
+            
+        case errSecItemNotFound:
+            return false
+            
+        default:
+            throw securityError(status: status)
+        }
+    }
 
     // MARK:
 
@@ -646,6 +677,48 @@ public final class Keychain {
             if status != errSecSuccess {
                 throw securityError(status: status)
             }
+        default:
+            throw securityError(status: status)
+        }
+    }
+    
+    public func add(_ value: Data, key: String) throws {
+        
+        var query = options.query()
+        query[AttributeAccount] = key
+        #if os(iOS)
+        if #available(iOS 9.0, *) {
+            query[UseAuthenticationUI] = UseAuthenticationUIFail
+        } else {
+            query[UseNoAuthenticationUI] = kCFBooleanTrue
+        }
+        #elseif os(OSX)
+        query[ReturnData] = kCFBooleanTrue
+        if #available(OSX 10.11, *) {
+            query[UseAuthenticationUI] = UseAuthenticationUIFail
+        }
+        #endif
+        
+        var status = SecItemAdd(query as CFDictionary, nil)
+        
+        switch status {
+        case errSecSuccess:
+            break
+            
+        case errSecDuplicateItem:
+            let (attributes, error) = options.attributes(key: key, value: value)
+            query[AttributeAccount] = key
+            
+            if let error = error {
+                print(error.localizedDescription)
+                throw error
+            }
+            
+            status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+            if status != errSecSuccess {
+                throw securityError(status: status)
+            }
+            
         default:
             throw securityError(status: status)
         }
